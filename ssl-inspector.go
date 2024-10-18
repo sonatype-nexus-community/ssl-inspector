@@ -27,19 +27,24 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/pavlo-v-chernykh/keystore-go/v4"
 	log "github.com/sirupsen/logrus"
 )
 
 var (
-	currentRuntime string = runtime.GOOS
-	debugLogging   bool   = false
-	testEndpoint   string
-	version        string = "development"
+	currentRuntime       string = runtime.GOOS
+	debugLogging         bool   = false
+	testEndpoint         string
+	trustStorePassphrase string
+	trustStorePath       string
+	version              string = "development"
 )
 
 func init() {
 	flag.BoolVar(&debugLogging, "X", false, "Enable debug logging")
 	flag.StringVar(&testEndpoint, "endpoint", "", "Endpoint to inspect SSL on. Can be https://domain (assuming port 443) or a domain and port after a colon (:)")
+	flag.StringVar(&trustStorePath, "trustStore", "", "Path to an optional JKS trust store")
+	flag.StringVar(&trustStorePassphrase, "trustStorePassphrase", "", "Passphrase for optional JKS trust store")
 }
 
 func usage() {
@@ -58,9 +63,16 @@ func main() {
 	flag.Usage = usage
 	flag.Parse()
 
-	println("")
-	println(fmt.Sprintf("	Running on:		%s/%s", currentRuntime, runtime.GOARCH))
-	println(fmt.Sprintf("	Scanner Version: 	%s", version))
+	println(`
+ ____  ____  _       _  _      ____  ____  _____ ____  _____  ____  ____ 
+/ ___\/ ___\/ \     / \/ \  /|/ ___\/  __\/  __//   _\/__ __\/  _ \/  __\
+|    \|    \| |     | || |\ |||    \|  \/||  \  |  /    / \  | / \||  \/|
+\___ |\___ || |_/\  | || | \||\___ ||  __/|  /_ |  \__  | |  | \_/||    /
+\____/\____/\____/  \_/\_/  \|\____/\_/   \____\\____/  \_/  \____/\_/\_\
+                                                                         
+`)
+	println(fmt.Sprintf("Running on:		%s/%s", currentRuntime, runtime.GOARCH))
+	println(fmt.Sprintf("Version: 		%s", version))
 	println("")
 
 	validatedEndpoint, err := validateEndpoint(testEndpoint)
@@ -70,23 +82,46 @@ func main() {
 	} else {
 		println("Validated - conducting test against: " + *validatedEndpoint)
 	}
+	println("")
 
 	// Load System Root CAs
-	// rootCAs, _ := x509.SystemCertPool()
-	// if rootCAs == nil {
-	// 	rootCAs = x509.NewCertPool()
-	// }
+	rootCAs, _ := x509.SystemCertPool()
+	if rootCAs == nil {
+		rootCAs = x509.NewCertPool()
+	}
 
-	valid, messages, err := checkSSL(*validatedEndpoint)
+	// Load any custom Trust Store too
+	if trustStorePath != "" {
+		keystore := readKeyStore(trustStorePath, []byte(trustStorePassphrase))
+
+		for _, a := range keystore.Aliases() {
+			tce, err := keystore.GetTrustedCertificateEntry(a)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			cert, err := x509.ParseCertificates(tce.Certificate.Content)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			rootCAs.AddCert(cert[0])
+			println("- Loaded Custom CA: " + cert[0].Subject.CommonName)
+		}
+		println("")
+		println("")
+	}
+
+	valid, messages, err := checkSSL(*validatedEndpoint, rootCAs)
 	if err != nil {
 		println(fmt.Sprintf("Error performing checks: %v", err))
 		os.Exit(1)
 	}
 
 	if valid {
-		println(fmt.Sprintf("All checked passed connecting to %s", *validatedEndpoint))
+		println(fmt.Sprintf("✅ All checked passed connecting to %s", *validatedEndpoint))
 	} else {
-		println(fmt.Sprintf("!!! Connection to %s will not work. !!!", *validatedEndpoint))
+		println(fmt.Sprintf("❌ Connection to %s will not work", *validatedEndpoint))
 		println("")
 		println(fmt.Sprintf("There are %d certificate errors connecting to %s. They are:", len(messages), *validatedEndpoint))
 		println("")
@@ -102,11 +137,11 @@ func main() {
  *
  * Returns true/false, list of messages and optionally an error.
  */
-func checkSSL(endpoint string) (bool, []string, error) {
+func checkSSL(endpoint string, rootCAs *x509.CertPool) (bool, []string, error) {
 	messages := make([]string, 0)
 	config := &tls.Config{
 		// InsecureSkipVerify: *insecure,
-		// RootCAs: rootCAs,
+		RootCAs: rootCAs,
 	}
 
 	_, err := tls.Dial("tcp", endpoint, config)
@@ -149,6 +184,29 @@ func checkSSL(endpoint string) (bool, []string, error) {
 	}
 
 	return true, messages, nil
+}
+
+/**
+ * Read JKS from path
+ */
+func readKeyStore(filename string, password []byte) keystore.KeyStore {
+	f, err := os.Open(filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer func() {
+		if err := f.Close(); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	ks := keystore.New()
+	if err := ks.Load(f, password); err != nil {
+		log.Fatal(err) //nolint: gocritic
+	}
+
+	return ks
 }
 
 /**

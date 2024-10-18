@@ -17,6 +17,7 @@
 package main
 
 import (
+	"crypto/x509"
 	"runtime"
 	"testing"
 
@@ -24,15 +25,17 @@ import (
 )
 
 func TestCheckSSL(t *testing.T) {
+	rootCAs, _ := x509.SystemCertPool()
+
 	t.Run("validAndTrustedByOS", func(t *testing.T) {
-		valid, messages, err := checkSSL("badssl.com:443")
+		valid, messages, err := checkSSL("badssl.com:443", rootCAs)
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(messages))
 		assert.True(t, valid)
 	})
 
 	t.Run("expiredAndTrustedByOS", func(t *testing.T) {
-		valid, messages, err := checkSSL("expired.badssl.com:443")
+		valid, messages, err := checkSSL("expired.badssl.com:443", rootCAs)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(messages))
 		assert.Equal(t, "Certifcate for CN=*.badssl.com,OU=Domain Control Validated+OU=PositiveSSL Wildcard is invalid because: Certificate expired", messages[0])
@@ -40,7 +43,7 @@ func TestCheckSSL(t *testing.T) {
 	})
 
 	t.Run("expiredAndTrustedByOSWithPort", func(t *testing.T) {
-		valid, messages, err := checkSSL("expired.badssl.com:443")
+		valid, messages, err := checkSSL("expired.badssl.com:443", rootCAs)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(messages))
 		assert.Equal(t, "Certifcate for CN=*.badssl.com,OU=Domain Control Validated+OU=PositiveSSL Wildcard is invalid because: Certificate expired", messages[0])
@@ -48,7 +51,7 @@ func TestCheckSSL(t *testing.T) {
 	})
 
 	t.Run("wrongHostAndTrustedByOS", func(t *testing.T) {
-		valid, messages, err := checkSSL("wrong.host.badssl.com:443")
+		valid, messages, err := checkSSL("wrong.host.badssl.com:443", rootCAs)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(messages))
 		assert.Equal(t, "Certifcate for CN=*.badssl.com is not valid for wrong.host.badssl.com:443", messages[0])
@@ -56,7 +59,7 @@ func TestCheckSSL(t *testing.T) {
 	})
 
 	t.Run("unknownAuthorityAndTrustedByOS", func(t *testing.T) {
-		valid, messages, err := checkSSL("self-signed.badssl.com:443")
+		valid, messages, err := checkSSL("self-signed.badssl.com:443", rootCAs)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(messages))
 		assert.Equal(t, "Certifcate for CN=*.badssl.com,O=BadSSL,L=San Francisco,ST=California,C=US is not trusted. This could be because:\n\t1. It is self-signed\n\t2. It is signed by an unknown authority\n\t3. The CA that signed this certificate is not a invalid Certificate Authority\n\t\n\tIt was signed by: *.badssl.com", messages[0])
@@ -64,7 +67,7 @@ func TestCheckSSL(t *testing.T) {
 	})
 
 	t.Run("untrustedRootAndTrustedByOS", func(t *testing.T) {
-		valid, messages, err := checkSSL("untrusted-root.badssl.com:443")
+		valid, messages, err := checkSSL("untrusted-root.badssl.com:443", rootCAs)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(messages))
 		assert.False(t, valid)
@@ -73,7 +76,7 @@ func TestCheckSSL(t *testing.T) {
 	if runtime.GOOS == "darwin" {
 		// Looks like Windows and Linux do not do realtime CRL checks
 		t.Run("revokedAndTrustedByOS", func(t *testing.T) {
-			valid, messages, err := checkSSL("revoked.badssl.com:443")
+			valid, messages, err := checkSSL("revoked.badssl.com:443", rootCAs)
 			assert.NoError(t, err)
 			assert.Equal(t, 1, len(messages))
 			assert.Equal(t, "Certifcate for revoked.badssl.com:443 is invalid because: tls: failed to verify certificate: x509: “revoked.badssl.com” certificate is revoked", messages[0])
@@ -83,7 +86,9 @@ func TestCheckSSL(t *testing.T) {
 }
 
 func TestSingleCert(t *testing.T) {
-	valid, messages, err := checkSSL("expired.badssl.com:443")
+	rootCAs, _ := x509.SystemCertPool()
+
+	valid, messages, err := checkSSL("expired.badssl.com:443", rootCAs)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(messages))
 	for _, m := range messages {
