@@ -39,7 +39,7 @@ Last but not least of all - have fun!
 
 <!-- Links Section -->
 
-[shield_gh-workflow-test]: https://img.shields.io/github/actions/workflow/status/sonatype-nexus-community/ssl-inspector/release.yaml?branch=main&logo=GitHub&logoColor=white 'build'
+[shield_gh-workflow-test]: https://img.shields.io/github/actions/workflow/status/sonatype-nexus-community/ssl-inspector/build.yaml?branch=main&logo=GitHub&logoColor=white 'build'
 [shield_license]: https://img.shields.io/github/license/sonatype-nexus-community/ssl-inspector?logo=open%20source%20initiative&logoColor=white 'license'
-[link_gh-workflow-test]: https://github.com/sonatype-nexus-community/ssl-inspector/actions/workflows/release.yaml?query=branch%3Amain
+[link_gh-workflow-test]: https://github.com/sonatype-nexus-community/ssl-inspector/actions/workflows/build.yaml?query=branch%3Amain
 [license_file]: https://github.com/sonatype-nexus-community/ssl-inspector/blob/main/LICENSE
