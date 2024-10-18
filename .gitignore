@@ -47,10 +47,4 @@ vendor/
 # Go workspace file
 go.work
 
-bin
-data
-*.log
-cvedb*
-temp
-*.xml
-*.json
+ssl-inspector

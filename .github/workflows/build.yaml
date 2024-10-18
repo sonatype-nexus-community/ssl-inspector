@@ -29,4 +29,4 @@ jobs:
 
             - name: Run Tests
               run: |
-                  go testgolan
+                  go test
