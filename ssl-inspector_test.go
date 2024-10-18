@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2024-present Paul Horton (@madpah)
+ * Copyright (c) 2024-present Sonatype Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
