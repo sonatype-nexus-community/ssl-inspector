@@ -22,7 +22,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"net/http"
 	"net/url"
 	"os"
 	"runtime"
@@ -55,7 +54,6 @@ func main() {
 	} else {
 		log.SetLevel(log.InfoLevel)
 	}
-	// log.SetFormatter(&util.LogFormatter{Module: "SCANNER"})
 
 	flag.Usage = usage
 	flag.Parse()
@@ -69,6 +67,8 @@ func main() {
 	if err != nil {
 		println("Supplied endpoint is not well formed")
 		os.Exit(1)
+	} else {
+		println("Validated - conducting test against: " + *validatedEndpoint)
 	}
 
 	// Load System Root CAs
@@ -77,7 +77,7 @@ func main() {
 	// 	rootCAs = x509.NewCertPool()
 	// }
 
-	valid, messages, err := checkSSL(fmt.Sprintf("https://%s", *validatedEndpoint))
+	valid, messages, err := checkSSL(*validatedEndpoint)
 	if err != nil {
 		println(fmt.Sprintf("Error performing checks: %v", err))
 		os.Exit(1)
@@ -109,48 +109,37 @@ func checkSSL(endpoint string) (bool, []string, error) {
 		// RootCAs: rootCAs,
 	}
 
-	tr := &http.Transport{TLSClientConfig: config}
-	client := &http.Client{Transport: tr}
-
-	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
-	if err != nil {
-		return false, messages, err
-	}
-
-	_, err = client.Do(req)
+	_, err := tls.Dial("tcp", endpoint, config)
 
 	if err != nil {
 		var certValidationError *tls.CertificateVerificationError
-		var netUrlError *url.Error
-		if errors.As(err, &netUrlError) {
-			//println("url.Error")
-			if errors.As(netUrlError.Err, &certValidationError) {
-				//println("tls.CertificateVerificationError")
-				handled := false
-				if hostnameError, ok := certValidationError.Err.(x509.HostnameError); ok {
-					messages = append(messages, fmt.Sprintf("Certifcate for %s is not valid for %s", hostnameError.Certificate.Subject, endpoint))
-					handled = true
-				}
+		if errors.As(err, &certValidationError) {
+			//println("tls.CertificateVerificationError")
+			handled := false
+			if hostnameError, ok := certValidationError.Err.(x509.HostnameError); ok {
+				messages = append(messages, fmt.Sprintf("Certifcate for %s is not valid for %s", hostnameError.Certificate.Subject, endpoint))
+				handled = true
+			}
 
-				if certInvalidError, ok := certValidationError.Err.(x509.CertificateInvalidError); ok {
-					messages = append(messages, fmt.Sprintf("Certifcate for %s is invalid because: %s", certInvalidError.Cert.Subject, getInvalidReason(int(certInvalidError.Reason))))
-					handled = true
-				}
+			if certInvalidError, ok := certValidationError.Err.(x509.CertificateInvalidError); ok {
+				messages = append(messages, fmt.Sprintf("Certifcate for %s is invalid because: %s", certInvalidError.Cert.Subject, getInvalidReason(int(certInvalidError.Reason))))
+				handled = true
+			}
 
-				if unknownAuthorityError, ok := certValidationError.Err.(x509.UnknownAuthorityError); ok {
-					messages = append(messages, fmt.Sprintf(`Certifcate for %s is not trusted. This could be because:
+			if unknownAuthorityError, ok := certValidationError.Err.(x509.UnknownAuthorityError); ok {
+				messages = append(messages, fmt.Sprintf(`Certifcate for %s is not trusted. This could be because:
 	1. It is self-signed
 	2. It is signed by an unknown authority
 	3. The CA that signed this certificate is not a invalid Certificate Authority
 	
 	It was signed by: %s`, unknownAuthorityError.Cert.Subject, unknownAuthorityError.Cert.Issuer.CommonName))
-					handled = true
-				}
-
-				if !handled {
-					messages = append(messages, fmt.Sprintf("Certifcate for %s is invalid because: %s", endpoint, certValidationError.Error()))
-				}
+				handled = true
 			}
+
+			if !handled {
+				messages = append(messages, fmt.Sprintf("Certifcate for %s is invalid because: %s", endpoint, certValidationError.Error()))
+			}
+			// }
 		} else {
 			println("Failed making request")
 			println(err.Error)
