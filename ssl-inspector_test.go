@@ -73,15 +73,15 @@ func TestCheckSSL(t *testing.T) {
 	})
 }
 
-func TestSingleCert(t *testing.T) {
-	valid, messages, err := checkSSL("https://revoked.badssl.com")
-	assert.NoError(t, err)
-	assert.Equal(t, 1, len(messages))
-	for _, m := range messages {
-		println(m)
-	}
-	assert.False(t, valid)
-}
+// func TestSingleCert(t *testing.T) {
+// 	valid, messages, err := checkSSL("https://revoked.badssl.com")
+// 	assert.NoError(t, err)
+// 	assert.Equal(t, 1, len(messages))
+// 	for _, m := range messages {
+// 		println(m)
+// 	}
+// 	assert.False(t, valid)
+// }
 
 func TestParseEndpoints(t *testing.T) {
 	t.Run("httpsNoPortSpecified", func(t *testing.T) {

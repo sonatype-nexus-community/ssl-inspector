@@ -123,9 +123,9 @@ func checkSSL(endpoint string) (bool, []string, error) {
 		var certValidationError *tls.CertificateVerificationError
 		var netUrlError *url.Error
 		if errors.As(err, &netUrlError) {
-			println("url.Error")
+			//println("url.Error")
 			if errors.As(netUrlError.Err, &certValidationError) {
-				println("tls.CertificateVerificationError")
+				//println("tls.CertificateVerificationError")
 				handled := false
 				if hostnameError, ok := certValidationError.Err.(x509.HostnameError); ok {
 					messages = append(messages, fmt.Sprintf("Certifcate for %s is not valid for %s", hostnameError.Certificate.Subject, endpoint))
