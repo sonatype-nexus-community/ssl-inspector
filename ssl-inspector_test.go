@@ -25,42 +25,46 @@ import (
 
 func TestCheckSSL(t *testing.T) {
 	t.Run("validAndTrustedByOS", func(t *testing.T) {
-		valid, messages, err := checkSSL("https://badssl.com")
+		valid, messages, err := checkSSL("badssl.com:443")
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(messages))
 		assert.True(t, valid)
 	})
 
 	t.Run("expiredAndTrustedByOS", func(t *testing.T) {
-		valid, messages, err := checkSSL("https://expired.badssl.com")
+		valid, messages, err := checkSSL("expired.badssl.com:443")
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(messages))
+		assert.Equal(t, "Certifcate for CN=*.badssl.com,OU=Domain Control Validated+OU=PositiveSSL Wildcard is invalid because: Certificate expired", messages[0])
 		assert.False(t, valid)
 	})
 
 	t.Run("expiredAndTrustedByOSWithPort", func(t *testing.T) {
-		valid, messages, err := checkSSL("https://expired.badssl.com:443")
+		valid, messages, err := checkSSL("expired.badssl.com:443")
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(messages))
+		assert.Equal(t, "Certifcate for CN=*.badssl.com,OU=Domain Control Validated+OU=PositiveSSL Wildcard is invalid because: Certificate expired", messages[0])
 		assert.False(t, valid)
 	})
 
 	t.Run("wrongHostAndTrustedByOS", func(t *testing.T) {
-		valid, messages, err := checkSSL("https://wrong.host.badssl.com")
+		valid, messages, err := checkSSL("wrong.host.badssl.com:443")
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(messages))
+		assert.Equal(t, "Certifcate for CN=*.badssl.com is not valid for wrong.host.badssl.com:443", messages[0])
 		assert.False(t, valid)
 	})
 
 	t.Run("unknownAuthorityAndTrustedByOS", func(t *testing.T) {
-		valid, messages, err := checkSSL("https://self-signed.badssl.com")
+		valid, messages, err := checkSSL("self-signed.badssl.com:443")
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(messages))
+		assert.Equal(t, "Certifcate for CN=*.badssl.com,O=BadSSL,L=San Francisco,ST=California,C=US is not trusted. This could be because:\n\t1. It is self-signed\n\t2. It is signed by an unknown authority\n\t3. The CA that signed this certificate is not a invalid Certificate Authority\n\t\n\tIt was signed by: *.badssl.com", messages[0])
 		assert.False(t, valid)
 	})
 
 	t.Run("untrustedRootAndTrustedByOS", func(t *testing.T) {
-		valid, messages, err := checkSSL("https://untrusted-root.badssl.com")
+		valid, messages, err := checkSSL("untrusted-root.badssl.com:443")
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(messages))
 		assert.False(t, valid)
@@ -69,23 +73,24 @@ func TestCheckSSL(t *testing.T) {
 	if runtime.GOOS == "darwin" {
 		// Looks like Windows and Linux do not do realtime CRL checks
 		t.Run("revokedAndTrustedByOS", func(t *testing.T) {
-			valid, messages, err := checkSSL("https://revoked.badssl.com")
+			valid, messages, err := checkSSL("revoked.badssl.com:443")
 			assert.NoError(t, err)
 			assert.Equal(t, 1, len(messages))
+			assert.Equal(t, "Certifcate for revoked.badssl.com:443 is invalid because: tls: failed to verify certificate: x509: “revoked.badssl.com” certificate is revoked", messages[0])
 			assert.False(t, valid)
 		})
 	}
 }
 
-// func TestSingleCert(t *testing.T) {
-// 	valid, messages, err := checkSSL("https://revoked.badssl.com")
-// 	assert.NoError(t, err)
-// 	assert.Equal(t, 1, len(messages))
-// 	for _, m := range messages {
-// 		println(m)
-// 	}
-// 	assert.False(t, valid)
-// }
+func TestSingleCert(t *testing.T) {
+	valid, messages, err := checkSSL("expired.badssl.com:443")
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(messages))
+	for _, m := range messages {
+		println(m)
+	}
+	assert.False(t, valid)
+}
 
 func TestParseEndpoints(t *testing.T) {
 	t.Run("httpsNoPortSpecified", func(t *testing.T) {
@@ -110,5 +115,11 @@ func TestParseEndpoints(t *testing.T) {
 		domain, err := validateEndpoint("badssl.com:555")
 		assert.NoError(t, err)
 		assert.Equal(t, "badssl.com:555", *domain)
+	})
+
+	t.Run("ldapsPortSpecified", func(t *testing.T) {
+		domain, err := validateEndpoint("ldaps://revoked.badssl.com:443")
+		assert.NoError(t, err)
+		assert.Equal(t, "revoked.badssl.com:443", *domain)
 	})
 }
